@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ask Your Database</title>
+<style>
+  :root{--bg:#f4f6fb;--card:#fff;--ink:#1c2333;--mut:#6b7385;--line:#e3e6ef;--brand:#4f46e5;--brand2:#4338ca;
+        --ok:#0f7a43;--okbg:#e7f6ee;--err:#b3261e;--errbg:#fdecea;--warn:#8a5a00;--warnbg:#fff4de;--code:#0f172a}
+  *{box-sizing:border-box}
+  body{margin:0;font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink)}
+  header{background:#111827;color:#fff;padding:14px 24px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+  header h1{margin:0;font-size:18px;font-weight:650}
+  .badge{font-size:12px;padding:3px 10px;border-radius:99px;background:#1f2937;color:#c7d2fe;border:1px solid #374151}
+  .layout{display:grid;grid-template-columns:250px minmax(0,1fr) 270px;gap:16px;padding:16px;max-width:1560px;margin:0 auto;align-items:start}
+  @media(max-width:1050px){.layout{grid-template-columns:1fr}}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
+  .card h2{margin:0 0 10px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mut)}
+  textarea{width:100%;font:inherit;padding:10px 12px;border:1px solid var(--line);border-radius:8px;resize:vertical;background:#fff;color:var(--ink)}
+  textarea:focus{outline:2px solid #c7d2fe;border-color:var(--brand)}
+  #sql{font:13.5px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;background:var(--code);color:#e2e8f0;border-color:var(--code);min-height:110px}
+  .row{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  button{font:inherit;font-weight:600;border:0;border-radius:8px;padding:9px 16px;cursor:pointer;background:var(--brand);color:#fff}
+  button:hover:not(:disabled){background:var(--brand2)}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  button.ghost{background:#eef0f8;color:var(--ink)}
+  button.ghost:hover:not(:disabled){background:#e1e4f2}
+  .chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .chip{font-size:12.5px;font-weight:500;padding:5px 10px;border-radius:99px;background:#eef0f8;color:#3b4261;border:1px solid var(--line)}
+  .chip:hover{background:#e1e4f2}
+  .msg{margin-top:12px;padding:10px 14px;border-radius:8px;font-size:14px}
+  .msg.err{background:var(--errbg);color:var(--err)} .msg.warn{background:var(--warnbg);color:var(--warn)} .msg.ok{background:var(--okbg);color:var(--ok)}
+  .note{color:var(--mut);font-size:13px;margin-top:6px}
+  .stack > * + *{margin-top:16px}
+  .tablewrap{overflow:auto;max-height:430px;border:1px solid var(--line);border-radius:8px;margin-top:10px}
+  table{border-collapse:collapse;width:100%;font-size:13.5px}
+  th,td{padding:7px 12px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+  th{position:sticky;top:0;background:#f0f2fa;font-weight:650;z-index:1}
+  tr:hover td{background:#fafbff}
+  td.num{text-align:right;font-variant-numeric:tabular-nums} td.null{color:#aab;font-style:italic}
+  .meta{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center;font-size:14px}
+  .pager{display:flex;gap:6px;align-items:center;font-size:13px}
+  .pager button{padding:5px 10px}
+  select{font:inherit;padding:4px 6px;border-radius:6px;border:1px solid var(--line)}
+  details{margin-bottom:6px} summary{cursor:pointer;font-weight:600}
+  summary small{color:var(--mut);font-weight:400}
+  ul.cols{list-style:none;margin:4px 0 6px;padding-left:14px;font-size:13px;color:#3b4261}
+  ul.cols li span{color:var(--mut);font-size:12px;margin-left:4px}
+  .hist{list-style:none;margin:0;padding:0;max-height:640px;overflow:auto}
+  .hist li{padding:9px 10px;border:1px solid var(--line);border-radius:8px;margin-bottom:8px;cursor:pointer;background:#fff}
+  .hist li:hover{border-color:var(--brand);background:#f8f8ff}
+  .hist b{display:block;font-size:13.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .hist small{color:var(--mut)}
+  .empty{color:var(--mut);font-size:14px}
+  label.inline{font-size:13.5px;color:var(--mut);display:flex;gap:6px;align-items:center}
+</style>
+</head>
+<body>
+<header>
+  <h1>🗄️ Ask Your Database <span style="font-weight:400;color:#9ca3af">· Natural language to SQL</span></h1>
+  <span class="badge" id="provider">loading…</span>
+</header>
+
+<div class="layout">
+  <!-- Schema explorer -->
+  <aside class="card">
+    <h2>Schema explorer</h2>
+    <div id="schema" class="empty">Loading…</div>
+  </aside>
+
+  <!-- Main -->
+  <main class="stack">
+    <section class="card">
+      <h2>1 · Ask in plain English</h2>
+      <textarea id="question" rows="2" placeholder='e.g. "Find the top 5 customers by total spend"'></textarea>
+      <div class="chips" id="chips"></div>
+      <div class="row">
+        <button id="genBtn">Generate SQL</button>
+        <label class="inline"><input type="checkbox" id="autorun"> run automatically after generating</label>
+      </div>
+      <div id="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>2 · Generated SQL <span style="text-transform:none;letter-spacing:0">(you can edit it before running)</span></h2>
+      <textarea id="sql" spellcheck="false" placeholder="The SQL query will appear here…"></textarea>
+      <div class="note" id="note"></div>
+      <div class="row"><button id="runBtn" disabled>▶ Run query</button></div>
+    </section>
+
+    <section class="card">
+      <h2>3 · Results</h2>
+      <div id="results" class="empty">Run a query to see results here.</div>
+    </section>
+  </main>
+
+  <!-- History -->
+  <aside class="card">
+    <h2>Query history (this session)</h2>
+    <ul class="hist" id="history"></ul>
+    <div class="empty" id="histEmpty">No queries yet.</div>
+  </aside>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let history = [], current = null, page = 1, pageSize = 10;
+
+const EXAMPLES = ["List all users", "Show me all orders placed in the last 30 days", "How many products are out of stock?",
+                  "Find the top 5 customers by total spend"];
+
+async function api(path, body) {
+  const opt = body ? {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)} : {};
+  let r; try { r = await fetch(path, opt); } catch { throw new Error('Cannot reach the server. Is it running?'); }
+  let data = {}; try { data = await r.json(); } catch {}
+  if (!r.ok) throw new Error(data.error || (data.detail ? 'Invalid request.' : 'Server error ' + r.status));
+  return data;
+}
+
+function showMsg(kind, text) { $('msg').innerHTML = `<div class="msg ${kind}">${esc(text)}</div>`; }
+function clearMsg() { $('msg').innerHTML = ''; }
+
+/* ---------- schema + chips ---------- */
+async function loadSchema() {
+  try {
+    const d = await api('/api/schema');
+    $('provider').textContent = d.provider === 'offline' ? 'Offline demo mode (no AI key)' : 'AI: ' + d.provider;
+    $('schema').innerHTML = d.tables.map(t => `
+      <details><summary>${esc(t.table)} <small>(${t.rows} rows)</small></summary>
+      <ul class="cols">${t.columns.map(c => `<li>${esc(c.name)}<span>${esc(c.type)}${c.pk ? ' · PK' : ''}</span></li>`).join('')}</ul></details>`).join('');
+  } catch (e) { $('schema').textContent = e.message; }
+}
+$('chips').innerHTML = EXAMPLES.map(e => `<button class="chip" type="button">${esc(e)}</button>`).join('');
+$('chips').addEventListener('click', e => {
+  if (e.target.classList.contains('chip')) { $('question').value = e.target.textContent; generate(); }
+});
+
+/* ---------- generate ---------- */
+async function generate() {
+  clearMsg();
+  const q = $('question').value.trim();
+  if (q.length < 4) { showMsg('warn', 'Please describe the data you need, e.g. "Show all orders from the last 30 days".'); return; }
+  $('genBtn').disabled = true; $('genBtn').textContent = 'Generating…';
+  try {
+    const d = await api('/api/generate', {question: q});
+    $('sql').value = d.sql; $('note').textContent = d.note || ''; $('runBtn').disabled = false;
+    if ($('autorun').checked) await run();
+  } catch (e) { showMsg('err', e.message); }
+  finally { $('genBtn').disabled = false; $('genBtn').textContent = 'Generate SQL'; }
+}
+
+/* ---------- run ---------- */
+async function run() {
+  clearMsg();
+  const sql = $('sql').value.trim();
+  if (!sql) { showMsg('warn', 'There is no SQL to run yet. Generate one first.'); return; }
+  $('runBtn').disabled = true;
+  try {
+    const d = await api('/api/execute', {sql});
+    current = d; page = 1; renderResults();
+    addHistory($('question').value.trim(), sql, d);
+  } catch (e) { current = null; $('results').innerHTML = `<div class="msg err">${esc(e.message)}</div>`; }
+  finally { $('runBtn').disabled = false; }
+}
+
+/* ---------- results ---------- */
+function renderResults() {
+  const d = current, box = $('results');
+  if (!d) { box.innerHTML = '<span class="empty">Run a query to see results here.</span>'; return; }
+  if (d.row_count === 0) {
+    box.innerHTML = `<div class="msg ok">✓ The query ran successfully but returned no rows. <small>(${d.elapsed_ms} ms)</small></div>`; return;
+  }
+  const pages = Math.ceil(d.row_count / pageSize);
+  page = Math.min(page, pages);
+  const slice = d.rows.slice((page - 1) * pageSize, page * pageSize);
+  const head = d.columns.map(c => `<th>${esc(c)}</th>`).join('');
+  const body = slice.map(r => '<tr>' + r.map(v =>
+      v === null ? '<td class="null">NULL</td>' : `<td class="${typeof v === 'number' ? 'num' : ''}">${esc(v)}</td>`).join('') + '</tr>').join('');
+  box.innerHTML = `
+    <div class="meta">
+      <strong>Showing ${d.row_count} result${d.row_count === 1 ? '' : 's'}${d.truncated ? ' (capped — refine your query)' : ''}
+        <span style="color:var(--mut);font-weight:400">· ${d.elapsed_ms} ms</span></strong>
+      <div class="row" style="margin:0">
+        <button class="ghost" id="csvBtn">⬇ Export CSV</button>
+        <span class="pager">Rows/page
+          <select id="ps">${[10,25,50,100].map(n => `<option ${n === pageSize ? 'selected' : ''}>${n}</option>`).join('')}</select>
+          <button class="ghost" id="prev" ${page === 1 ? 'disabled' : ''}>‹</button>
+          <span>${page} / ${pages}</span>
+          <button class="ghost" id="next" ${page === pages ? 'disabled' : ''}>›</button>
+        </span>
+      </div>
+    </div>
+    <div class="tablewrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
+  $('prev').onclick = () => { page--; renderResults(); };
+  $('next').onclick = () => { page++; renderResults(); };
+  $('ps').onchange = e => { pageSize = +e.target.value; page = 1; renderResults(); };
+  $('csvBtn').onclick = exportCsv;
+}
+
+function exportCsv() {
+  const q = v => { v = v === null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+  const csv = [current.columns.map(q).join(','), ...current.rows.map(r => r.map(q).join(','))].join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type: 'text/csv'}));
+  a.download = 'query_results.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- history ---------- */
+function addHistory(question, sql, result) {
+  history.unshift({question, sql, result, time: new Date().toLocaleTimeString()});
+  renderHistory();
+}
+function renderHistory() {
+  $('histEmpty').style.display = history.length ? 'none' : 'block';
+  $('history').innerHTML = history.map((h, i) => `
+    <li data-i="${i}" title="${esc(h.sql)}"><b>${esc(h.question || h.sql)}</b>
+    <small>${h.time} · ${h.result.row_count} row${h.result.row_count === 1 ? '' : 's'}</small></li>`).join('');
+}
+$('history').addEventListener('click', e => {
+  const li = e.target.closest('li'); if (!li) return;
+  const h = history[+li.dataset.i];
+  $('question').value = h.question; $('sql').value = h.sql; $('runBtn').disabled = false;
+  $('note').textContent = 'Reloaded from history.'; clearMsg();
+  current = h.result; page = 1; renderResults();
+});
+
+$('genBtn').onclick = generate;
+$('runBtn').onclick = run;
+$('question').addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); generate(); } });
+$('sql').addEventListener('keydown', e => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); run(); } });
+loadSchema(); renderHistory();
+</script>
+</body>
+</html>
